@@ -19,9 +19,24 @@ stack* createStack(size_t size) {
     return newStack;
 }
 
+void ensureCapacityOfStack(stack* stack) {
+    int* newArray = (int*)calloc(2 * (size_t)stack -> size, sizeof(int));
+    memcpy(newArray, stack -> arrayOfIntegers, stack -> size);
+    stack -> arrayOfIntegers = newArray;
+}
+
+void ensureCapacity(char* expression, size_t size) {
+    char* newLine = (char*)calloc(2 * size + 1, sizeof(char));
+    memcpy(newLine, expression, size);
+    expression = newLine;
+}
+
 //Add the element to stack                                                                  Time: O(1)
 void push(stack* stack, int value) {
     stack -> arrayOfIntegers[stack -> size++] = value;
+    if (stack -> size % 1000 == 0) {
+        ensureCapacityOfStack(stack);
+    }
 }
 
 //Returns the element on the peek of stack                                                  Time: O(1)
@@ -41,10 +56,13 @@ void pop(stack* stack) {
 // Method, which scanning input and returns string before the next 'enter' symbol          Time: O(length)
 char* getLine() {
     char* line = (char*)calloc(1001, sizeof(char));
-    int currentIndex = 0;
+    size_t currentIndex = 0;
     char currentSymbol;
     while ((currentSymbol = (char)getchar()) != '\n') {
         line[currentIndex++] = currentSymbol;
+        if (currentIndex % 1000 == 0) {
+            ensureCapacity(line, currentIndex);
+        }
     }
     if (strlen(line) == 0) {
         printf("bad input");
@@ -57,7 +75,7 @@ char* getLine() {
 char** splitBySpaces(char* expression, int *quantityOfTokens) {
     char** splitted = (char**)calloc(1001, sizeof(char*));
     int currentIndexOfLine = 0,
-        currentIndex = 0;
+            currentIndex = 0;
     for (size_t i = 0; i < strlen(expression); i++) {
         if (expression[i] == ' ') {
             currentIndex = 0;
@@ -135,13 +153,7 @@ int main() {
     stack* stackOfNumbers = createStack(1000);
 
     //Allocating and initialising of input string
-    char* expression = (char*)calloc(1001, sizeof(char));
-    if (!expression) {
-        printf("No memory?!");
-        exit(1);
-    } else {
-        expression = getLine();
-    }
+    char* expression = getLine();
 
     //Split the input string to tokens
     int quantityOfTokens = 0;
