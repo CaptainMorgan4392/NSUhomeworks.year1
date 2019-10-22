@@ -31,6 +31,10 @@ int peek(stack* stack) {
 
 //Delete the peek element from stack                                                        Time: O(1)
 void pop(stack* stack) {
+    if (stack -> size == 0) {
+        printf("bad input");
+        exit(1);
+    }
     stack -> arrayOfIntegers[stack -> size--] = 0;
 }
 
