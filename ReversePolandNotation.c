@@ -103,6 +103,10 @@ void operationDivide(stack* stack) {
     pop(stack);
     int firstOperand = peek(stack);
     pop(stack);
+    if (secondOperand == 0) {
+        printf("division by zero");
+        exit(1);
+    }
     stack -> arrayOfIntegers[stack -> size++] = firstOperand / secondOperand;
 }
 
