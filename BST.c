@@ -1,5 +1,6 @@
 #include <mm_malloc.h>
-
+//TODO:
+//1. Add comments
 typedef struct Node {
     int value;
     struct Node* left;
