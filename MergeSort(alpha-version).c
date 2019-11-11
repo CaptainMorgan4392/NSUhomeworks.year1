@@ -1,10 +1,9 @@
 #define ll long long
-#define LENGTH 10000000
+#define LENGTH 10
  
 #include <stdio.h>
 #include <mm_malloc.h>
 #include <memory.h>
-#include <limits.h>
 #include <stdbool.h>
  
 FILE* names;
@@ -90,31 +89,25 @@ void mergeFiles(FILE* dst, FILE* src1, FILE* src2) {
     }
 }
  
-void mergeFilesBySegmentTree(FILE **arrayOfFiles, const size_t* arrayOfQuantities, size_t quantity) {
+void mergeFilesBySegmentTree(FILE **arrayOfFiles, const size_t* arrayOfQuantities, size_t quantity, FILE* fileOut) {
     FILE** segmentTreeOfFiles = (FILE**)calloc(2 * quantity - 1, sizeof(FILE*));
-    size_t* segmentTreeOfQuantities = (size_t*)calloc(2 * quantity - 1, sizeof(size_t));
  
     for (size_t i = 0; i < quantity; i++) {
         segmentTreeOfFiles[quantity - 1 + i] = arrayOfFiles[i];
-        segmentTreeOfQuantities[quantity - 1 + i] = arrayOfQuantities[i];
     }
  
     for (size_t i = quantity - 2; i >= 0; i--) {
         char *currentFileName = (char *)calloc(1001, sizeof(char));
         fscanf(names, "%1000s", currentFileName);
         segmentTreeOfFiles[i] = fopen(currentFileName, "w+");
-        segmentTreeOfQuantities[i] = segmentTreeOfQuantities[2 * i + 1] + segmentTreeOfQuantities[2 * i + 2];
         if (i == 0) break;
     }
  
-    for (size_t i = 0; i < 2 * quantity - 1; i++) {
-        printf("%zu ", segmentTreeOfQuantities[i]);
-    }
- 
-    for (size_t i = quantity - 2; i >= 0; i--) {
+    for (size_t i = quantity - 2; i > 0; i--) {
         mergeFiles(segmentTreeOfFiles[i], segmentTreeOfFiles[2 * i + 1], segmentTreeOfFiles[2 * i + 2]);
-        if (i == 0) break;
     }
+ 
+    mergeFiles(fileOut, segmentTreeOfFiles[1], segmentTreeOfFiles[2]);
 }
  
 size_t findTheClosestDegree(size_t number) {
@@ -126,7 +119,7 @@ size_t findTheClosestDegree(size_t number) {
 }
  
 void mergeSortForLargeArray(ll quantity, FILE* fileIn, FILE* fileOut) {
-    size_t quantityOfFiles = findTheClosestDegree((size_t)(quantity / LENGTH));
+    size_t quantityOfFiles = findTheClosestDegree((size_t)((quantity - 1) / LENGTH) + 1);
     FILE **arrayOfFiles = (FILE **) calloc(quantityOfFiles, sizeof(FILE *));
     for (size_t i = 0; i < quantityOfFiles; i++) {
         char *currentFileName = (char *)calloc(1001, sizeof(char));
@@ -163,7 +156,7 @@ void mergeSortForLargeArray(ll quantity, FILE* fileIn, FILE* fileOut) {
         }
     }
  
-    mergeFilesBySegmentTree(arrayOfFiles, arrayOfQuantities, quantityOfFiles);
+    mergeFilesBySegmentTree(arrayOfFiles, arrayOfQuantities, quantityOfFiles, fileOut);
 }
  
 void genArray(FILE* fileOut, int argc, char* argv[]) {
@@ -217,9 +210,13 @@ void sortArray(FILE* fileIn, FILE* fileOut, int argc, char* argv[]) {
     }
  
     fileIn = fopen(argv[2], "r");
+    fileOut = fopen(argv[3], "w");
  
     ll quantity;
-    fscanf(fileIn, "%lli", &quantity);
+    if (fscanf(fileIn, "%lli", &quantity) == 0) {
+        fprintf(fileOut, "Check input file for correct data.");
+        exit(1);
+    }
     if (quantity <= LENGTH) {
         ll* array = (ll*)calloc((size_t)quantity, sizeof(ll));
         for (ll i = 0; i < quantity; i++) {
@@ -233,8 +230,6 @@ void sortArray(FILE* fileIn, FILE* fileOut, int argc, char* argv[]) {
         }
         mergeSort(array, 0, (size_t)quantity);
  
-        fileOut = fopen(argv[3], "w");
- 
         for (size_t i = 0; i < quantity; i++) {
             fprintf(fileOut, "%lli ", array[i]);
         }
@@ -244,8 +239,8 @@ void sortArray(FILE* fileIn, FILE* fileOut, int argc, char* argv[]) {
 }
  
 int main(int argc, char* argv[]) {
-    FILE* fileIn;
-    FILE* fileOut;
+    FILE* fileIn = NULL;
+    FILE* fileOut = NULL;
  
     names = fopen("fileNames.txt", "r");
  
@@ -273,3 +268,4 @@ int main(int argc, char* argv[]) {
     }
     return 0;
 }
+
