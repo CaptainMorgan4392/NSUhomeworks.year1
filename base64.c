@@ -1,4 +1,7 @@
-#define boolean int
+#define us unsigned short
+#define ll long long
+
+#define boolean us
 #define false 0
 #define true 1
 
@@ -7,306 +10,294 @@
 #include <string.h>
 #include <ctype.h>
 
-// Exit codes
 typedef enum {
     SUCCESS,
     OUT_OF_MEMORY,
-    WRONG_INPUT,
     WRONG_OPTIONS,
-    UNKNOWN_SYMBOL
+    WRONG_SYMBOL
 } ExitCodes;
 
 const char* exitMessages[] = {
         "success",
         "out of memory",
-        "wrong input",
         "wrong options",
-        "unknown symbol"
+        "wrong symbols in input file"
 };
 
-//Options
+const char* base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+int hashTable[256];
+
 typedef enum {
-    ENCODING,
-    DECODING,
-    IGNORE,
-    ENTERS
+    ENCODE,
+    DECODE,
+    ENTERS,
+    IGNORE
 } Options;
 
-const char base64chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+int enters = -1;
 FILE* fileIn;
 FILE* fileOut;
 
-ExitCodes getOptions(int argc, char* argv[], boolean* options, int* enters) {
+
+void getHashTable() {
+    for (int i = 0; i < 256; i++) {
+        hashTable[i] = -1;
+    }
+
+    for (int i = 0; i < 64; i++) {
+        hashTable[base64Alphabet[i]] = i;
+    }
+
+    hashTable['='] = 0;
+}
+
+ll power(ll number, int degree) {
+    ll current = 1LL;
+    for (int i = 1; i <= degree; i++) {
+        current *= number;
+    }
+
+    return current;
+}
+
+ExitCodes getOptions(boolean* array, int argc, char* argv[]) {
+    if (argc < 4) {
+        return WRONG_OPTIONS;
+    }
+
     for (int i = 1; i < argc; i++) {
-        if ((argv[i][0] != '-' || strlen(argv[i]) != 2) && i < argc - 2) {
-            return WRONG_INPUT;
-        }
-
-        if (i == argc - 2) {
-            fileIn = fopen(argv[argc - 2], "r+");
-            fileOut = fopen(argv[argc - 1], "w+");
-
-            if (!fileIn || !fileOut) {
-                return WRONG_INPUT;
+        char firstSymbol = argv[i][0];
+        if (firstSymbol == '-') {
+            if (strlen(argv[i]) != 2 || i >= argc - 2) {
+                return WRONG_OPTIONS;
             }
 
-            break;
-        }
-
-        switch (argv[i][1]) {
-            case 'd':
-                if (options[DECODING]) {
-                    return WRONG_INPUT;
-                }
-                options[DECODING] = true;
-                break;
-            case 'e':
-                if (options[ENCODING]) {
-                    return WRONG_INPUT;
-                }
-                options[ENCODING] = true;
-                break;
-            case 'f':
-                if (options[ENTERS]) {
-                    return WRONG_INPUT;
-                }
-                options[ENTERS] = true;
-                i++;
-                *enters = 0;
-                for (int j = 0; j < strlen(argv[i]); j++) {
-                    char currentSymbol = argv[i][j];
-                    if (!isdigit(currentSymbol)) {
-                        return WRONG_INPUT;
+            char functionalSymbol = argv[i][1];
+            switch (functionalSymbol) {
+                case 'd':
+                    if (array[DECODE]) {
+                        return WRONG_OPTIONS;
                     }
-                    *enters = *enters * 10 + currentSymbol - '0';
+                    array[DECODE] = true;
+                    break;
+                case 'e':
+                    if (array[ENCODE]) {
+                        return WRONG_OPTIONS;
+                    }
+                    array[ENCODE] = true;
+                    break;
+                case 'i':
+                    if (array[IGNORE]) {
+                        return WRONG_OPTIONS;
+                    }
+                    array[IGNORE] = true;
+                    break;
+                case 'f':
+                    if (array[ENTERS] || i == argc - 1) {
+                        return WRONG_OPTIONS;
+                    }
+                    i++;
+                    for (size_t j = 0; j < strlen(argv[i]); j++) {
+                        if (j == 0) {
+                            enters = 0;
+                        }
+                        char curDigit = argv[i][j];
+                        if (!isdigit(curDigit)) {
+                            return WRONG_OPTIONS;
+                        }
+                        enters = 10 * enters + curDigit - '0';
+                    }
+                    if (enters < 0) {
+                        return WRONG_OPTIONS;
+                    }
+                    array[ENTERS] = true;
+                    break;
+                default:
+                    return WRONG_OPTIONS;
+            }
+        } else {
+            if (i < argc - 2) {
+                return WRONG_OPTIONS;
+            }
+
+            if (i == argc - 2) {
+                 fileIn = fopen(argv[i], "r+");
+                 if (!fileIn) {
+                     return WRONG_OPTIONS;
+                 }
+            } else {
+                fileOut = fopen(argv[i], "w+");
+                if (!fileOut) {
+                    return WRONG_OPTIONS;
                 }
-                break;
-            case 'i':
-                if (options[IGNORE]) {
-                    return WRONG_INPUT;
-                }
-                options[IGNORE] = true;
-                break;
-            default:
-                return WRONG_INPUT;
+            }
         }
+    }
+
+    if (!(array[DECODE] ^ array[ENCODE])) {
+        return WRONG_OPTIONS;
+    }
+
+    if (array[DECODE] && array[ENTERS]) {
+        return WRONG_OPTIONS;
+    }
+
+    if (array[ENCODE] && array[IGNORE]) {
+        return WRONG_OPTIONS;
     }
 
     return SUCCESS;
-}
-
-boolean checkOptions(const boolean* array) {
-    if (!(array[DECODING] ^ array[ENCODING])) {
-        return false;
-    }
-    if (array[ENCODING] && array[IGNORE]) {
-        return false;
-    }
-    if (array[DECODING] && array[ENTERS]) {
-        return false;
-    }
-
-    return true;
-}
-
-ExitCodes startEncoding(boolean enters, int charsInSingleLine) {
-    size_t currentIndex = 0,
-           currentB64Index = 0;
-    unsigned char currentB64Symbol = 0,
-                  currentRemainder = 0;
-    unsigned char currentSymbol;
-
-
-    while (!feof(fileIn) && (currentSymbol = (unsigned char)fgetc(fileIn)) != 255) {
-        switch (currentIndex % 3) {
-            case 0:
-                currentB64Symbol = currentSymbol >> 2;
-                currentRemainder = (unsigned char)(currentSymbol % 4);
-
-                fprintf(fileOut, "%c", base64chars[currentB64Symbol]);
-                currentB64Index++;
-                break;
-            case 1:
-                currentB64Symbol = currentRemainder << 4;
-                currentB64Symbol += currentSymbol >> 4;
-
-                fprintf(fileOut, "%c", base64chars[currentB64Symbol]);
-                currentB64Index++;
-
-                currentRemainder = (unsigned char)(currentSymbol % 16);
-                break;
-            case 2:
-                currentB64Symbol = currentRemainder << 2;
-                currentRemainder = currentSymbol >> 6;
-                currentB64Symbol += currentRemainder;
-                currentRemainder = (unsigned char)(currentSymbol % 64);
-
-                fprintf(fileOut, "%c", base64chars[currentB64Symbol]);
-                currentB64Index++;
-                if (currentB64Index % charsInSingleLine == 0) {
-                    fprintf(fileOut, "\n");
-                }
-
-                fprintf(fileOut, "%c", base64chars[currentRemainder]);
-                currentB64Index++;
-                break;
-            default:
-                continue;
-        }
-
-        currentIndex++;
-        if (currentB64Index % charsInSingleLine == 0) {
-            fprintf(fileOut, "\n");
-        }
-    }
-
-    if (currentIndex % 3 != 0) {
-        int moveByRemainder = currentIndex % 3 == 1 ? 4 : 2;
-        fprintf(fileOut, "%c", base64chars[currentRemainder << moveByRemainder]);
-        if (currentB64Index % charsInSingleLine == 0) {
-            fprintf(fileOut, "\n");
-        }
-        for (int i = 3 - ((int)currentIndex % 3); i > 0; i--) {
-            fprintf(fileOut, "=");
-        }
-    }
-
-    return SUCCESS;
-}
-
-boolean isValidChar(unsigned char c) {
-    if ('0' <= c && c <= '9')
-        return true;
-    if ('a' <= c && c <= 'z')
-        return true;
-    if ('A' <= c && c <= 'Z')
-        return true;
-    if (c == '+' || c == '/' || c == '=')
-        return true;
-    return false;
-}
-
-void getHashTable(int* table) {
-    memset(table, -1, 256);
-    for (int i = 0; i < 64; i++) {
-        table[base64chars[i]] = i;
-    }
 }
 
 ExitCodes startDecoding(boolean ignore) {
-    size_t currentB64Index = 0;
-    unsigned char currentB64Symbol,
-                  currentSymbol = 0,
-                  currentRemainder = 0;
-
-    int* hashTable = (int*)calloc(256, sizeof(unsigned char));
-    if (!hashTable) {
-        return OUT_OF_MEMORY;
-    }
-
-    getHashTable(hashTable);
-
+    unsigned char curSymbol;
     if (!ignore) {
-        size_t currentIndex = 0;
-        while (!feof(fileIn) && (currentB64Symbol = (unsigned char)fgetc(fileIn)) != 255)  {
-            if (!isValidChar(currentB64Symbol) && currentB64Symbol != '\n') {
-                printf("%li", currentIndex);
-                return UNKNOWN_SYMBOL;
+        while ((curSymbol = (unsigned char)fgetc(fileIn))) {
+            if (feof(fileIn)) {
+                break;
             }
-            currentIndex++;
+
+            if (strchr(base64Alphabet, curSymbol) == NULL && curSymbol != '=') {
+                return WRONG_SYMBOL;
+            }
         }
     }
 
     fseek(fileIn, 0, SEEK_SET);
 
-    size_t countOfEndSymbols = 0;
-    while (!feof(fileIn) && (currentB64Symbol = (unsigned char)fgetc(fileIn)) != 255) {
-        if (currentB64Symbol == '=') {
-            while (currentB64Symbol == '=') {
-                countOfEndSymbols++;
-                currentB64Symbol = (unsigned char)fgetc(fileIn);
+    unsigned char curBuffer[4];
+    size_t currentRead = 0;
+
+    getHashTable();
+
+    while (((currentRead = fread(curBuffer, sizeof(unsigned char), 4, fileIn)) == 4)) {
+        if (curBuffer[3] == '=') {
+            break;
+        }
+        ll current = 0;
+        for (int i = 0; i < 4; i++) {
+            current *= 64;
+            current += hashTable[curBuffer[i]];
+        }
+
+        for (int i = 2; i >= 0; i--) {
+            fprintf(fileOut, "%c", (unsigned char)(current >> (8 * i)));
+
+            if (i != 0) {
+                current %= power(256, i);
             }
-            break;
         }
-
-        if (currentB64Symbol == '\n') {
-            continue;
-        }
-
-        switch (currentB64Index % 4) {
-            case 0:
-                currentSymbol = (unsigned char)(hashTable[currentB64Symbol] << 2);
-                break;
-            case 1:
-                currentSymbol += (unsigned char)(hashTable[currentB64Symbol] >> 4);
-                currentRemainder = (unsigned char)(hashTable[currentB64Symbol] % 16);
-
-                fprintf(fileOut, "%c", currentSymbol);
-                break;
-            case 2:
-                currentSymbol = currentRemainder << 4;
-                currentSymbol += (unsigned char)(hashTable[currentB64Symbol] >> 2);
-                currentRemainder = (unsigned char)(hashTable[currentB64Symbol] % 4);
-
-                fprintf(fileOut, "%c", currentSymbol);
-                break;
-            case 3:
-                currentSymbol = currentRemainder << 6;
-                currentSymbol += hashTable[currentB64Symbol];
-
-                fprintf(fileOut, "%c", currentSymbol);
-                break;
-            default:
-                continue;
-        }
-
-        currentB64Index++;
     }
-    switch (countOfEndSymbols) {
-        case 1:
-            fprintf(fileOut, "%c", currentRemainder << 4);
+
+    if (currentRead > 0) {
+        ll current = 0;
+        for (int i = 0; i < 4; i++) {
+            current *= 64;
+            current += hashTable[curBuffer[i]];
+        }
+
+        for (int i = 2; i >= 0; i--) {
+            if (current >> (8 * i) != 0) {
+                fprintf(fileOut, "%c", (unsigned char)(current >> (8 * i)));
+            } else {
+                break;
+            }
+
+
+            if (i != 0) {
+                current %= power(256, i);
+            }
+        }
+    }
+    
+    return SUCCESS;
+}
+
+ExitCodes startEncoding(boolean isEnters) {
+    unsigned char curBuffer[3];
+    size_t currentRead = 0,
+           currentIndex = 0;
+    while ((currentRead = fread(curBuffer, sizeof(unsigned char), 3, fileIn)) == 3) {
+        ll current = 0;
+        for (int i = 0; i < 3; i++) {
+            current *= 256;
+            current += (ll)curBuffer[i];
+        }
+
+        for (int i = 3; i >= 0; i--) {
+            fprintf(fileOut, "%c", base64Alphabet[current >> 6 * i]);
+            currentIndex++;
+            if (isEnters && (currentIndex % enters == 0)) {
+                fprintf(fileOut, "\n");
+            }
+
+            if (i != 0) {
+                current %= power(64, i);
+            }
+        }
+
+
+        if (feof(fileIn)) {
             break;
-        case 2:
-            fprintf(fileOut, "%c", currentRemainder << 6);
-            break;
-        default:
-            break;
+        }
+    }
+
+    if (currentRead != 0) {
+        ll finalCounting = 0;
+        for (int i = 0; i < 3; i++) {
+            finalCounting *= 256;
+
+            if (i == currentRead) {
+                continue;
+            }
+
+            finalCounting += (ll)curBuffer[i];
+        }
+
+        for (int i = 3; i >= 0; i--) {
+            if ((currentRead == 1 && i >= 2) || (currentRead == 2 && i >= 1)) {
+                fprintf(fileOut, "%c", base64Alphabet[finalCounting >> 6 * i]);
+            } else {
+                fprintf(fileOut, "=");
+            }
+            currentIndex++;
+            if (isEnters && (currentIndex % enters == 0)) {
+                fprintf(fileOut, "\n");
+            }
+
+            if (i != 0) {
+                finalCounting %= power(64, i);
+            }
+        }
     }
 
     return SUCCESS;
 }
 
-ExitCodes startAlgorithm(int argc, char* argv[]) {
-    //Allocating array for options
-    boolean* includedOptions = (boolean*)calloc(4, sizeof(boolean));
-    if (!includedOptions) {
+ExitCodes mainMethod(int argc, char* argv[]) {
+    boolean* options = (boolean*)calloc(4, sizeof(boolean));
+    if (!options) {
         return OUT_OF_MEMORY;
     }
-
-    //Get options and check
-    ExitCodes getArrayOfOptions;
-    int enters = -1;
-    if ((getArrayOfOptions = getOptions(argc, argv, includedOptions, &enters)) != SUCCESS) {
-        return getArrayOfOptions;
+    for (int i = 0; i < 4; i++) {
+        options[i] = false;
     }
 
-    if (!checkOptions(includedOptions)) {
-        return WRONG_OPTIONS;
+    ExitCodes correctOptions;
+    if ((correctOptions = getOptions(options, argc, argv)) != SUCCESS) {
+        return correctOptions;
     }
 
-    //Start process
-    ExitCodes transforming;
-    boolean encoding = includedOptions[ENCODING] ? true : false;
-    if (encoding) {
-        boolean includeEnters = includedOptions[ENTERS] ? true : false;
-        if ((transforming = includeEnters ? startEncoding(true, enters) : startEncoding(false, -1)) != SUCCESS) {
-            return transforming;
+    if (options[DECODE]) {
+        ExitCodes decoding;
+        if ((decoding = startDecoding(options[IGNORE])) != SUCCESS) {
+            return decoding;
         }
     } else {
-        boolean ignore = includedOptions[IGNORE] ? true : false;
-        if ((transforming = ignore ? startDecoding(true) : startDecoding(false)) != SUCCESS) {
-            return transforming;
+        ExitCodes encoding;
+        if ((encoding = startEncoding(options[ENTERS])) != SUCCESS) {
+            return encoding;
         }
     }
 
@@ -314,8 +305,9 @@ ExitCodes startAlgorithm(int argc, char* argv[]) {
 }
 
 int main(int argc, char* argv[]) {
-    ExitCodes executing;
-    if ((executing = startAlgorithm(argc, argv)) != SUCCESS) {
-        fprintf(fileOut, "%s\n", exitMessages[executing]);
+    ExitCodes exec;
+    if ((exec = mainMethod(argc, argv)) != SUCCESS) {
+        printf("%s", exitMessages[exec]);
     }
+    return exec;
 }
