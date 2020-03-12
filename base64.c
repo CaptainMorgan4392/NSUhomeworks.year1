@@ -122,10 +122,10 @@ ExitCodes getOptions(boolean* array, int argc, char* argv[]) {
             }
 
             if (i == argc - 2) {
-                 fileIn = fopen(argv[i], "r+");
-                 if (!fileIn) {
-                     return WRONG_OPTIONS;
-                 }
+                fileIn = fopen(argv[i], "r+");
+                if (!fileIn) {
+                    return WRONG_OPTIONS;
+                }
             } else {
                 fileOut = fopen(argv[i], "w+");
                 if (!fileOut) {
@@ -172,9 +172,6 @@ ExitCodes startDecoding(boolean ignore) {
     getHashTable();
 
     while (((currentRead = fread(curBuffer, sizeof(unsigned char), 4, fileIn)) == 4)) {
-        if (curBuffer[3] == '=') {
-            break;
-        }
         ll current = 0;
         for (int i = 0; i < 4; i++) {
             current *= 64;
@@ -182,6 +179,12 @@ ExitCodes startDecoding(boolean ignore) {
         }
 
         for (int i = 2; i >= 0; i--) {
+            if (i == 0 && curBuffer[3] == '=') {
+                break;
+            } else if (i == 1 && curBuffer[2] == '=') {
+                break;
+            }
+
             fprintf(fileOut, "%c", (unsigned char)(current >> (8 * i)));
 
             if (i != 0) {
@@ -190,34 +193,13 @@ ExitCodes startDecoding(boolean ignore) {
         }
     }
 
-    if (currentRead > 0) {
-        ll current = 0;
-        for (int i = 0; i < 4; i++) {
-            current *= 64;
-            current += hashTable[curBuffer[i]];
-        }
-
-        for (int i = 2; i >= 0; i--) {
-            if (current >> (8 * i) != 0) {
-                fprintf(fileOut, "%c", (unsigned char)(current >> (8 * i)));
-            } else {
-                break;
-            }
-
-
-            if (i != 0) {
-                current %= power(256, i);
-            }
-        }
-    }
-    
     return SUCCESS;
 }
 
 ExitCodes startEncoding(boolean isEnters) {
     unsigned char curBuffer[3];
     size_t currentRead = 0,
-           currentIndex = 0;
+            currentIndex = 0;
     while ((currentRead = fread(curBuffer, sizeof(unsigned char), 3, fileIn)) == 3) {
         ll current = 0;
         for (int i = 0; i < 3; i++) {
